@@ -5,6 +5,7 @@
   </component>
   <component name="CMakeWorkspace" PROJECT_DIR="$PROJECT_DIR$" />
   <component name="WestSettings"><![CDATA[{
+  "toolchainName": "Zephyr",
   "boardName": "rpi_pico/rp2040"
 }]]></component>
 </project>
