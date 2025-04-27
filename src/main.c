@@ -1,83 +1,37 @@
-/*
-* Copyright (c) 2016 Intel Corporation
- * Copyright (c) 2020 Nordic Semiconductor ASA
- *
- * SPDX-License-Identifier: Apache-2.0
- */
-
-/**
- * @file Sample app to demonstrate PWM.
- */
-
-#include <zephyr/kernel.h>
-#include <zephyr/sys/printk.h>
-#include <zephyr/device.h>
 #include <zephyr/drivers/pwm.h>
+#include <zephyr/kernel.h>
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/sys/printk.h>
 
-#include "zephyr/usb/usb_device.h"
+
+#if !DT_NODE_HAS_STATUS(DT_ALIAS(pwm_motor0), okay)
+#error "pwm_motor0 device is not enabled"
+#endif
+
 
 static const struct pwm_dt_spec pwm_motor0 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_motor0));
 
-#define MIN_PERIOD PWM_SEC(1U) / 128U
-#define MAX_PERIOD PWM_SEC(1U)
-
 int main(void)
 {
-	uint32_t max_period;
-	uint32_t period;
-	uint8_t dir = 0U;
-	int ret;
-	usb_enable(NULL);
-	k_sleep(K_MSEC(3000));
-	printk("PWM-based blinky\n");
+    int ret;
 
-	if (!pwm_is_ready_dt(&pwm_motor0)) {
-		printk("Error: PWM device %s is not ready\n",
-			   pwm_motor0.dev->name);
-		return 0;
-	}
+    if (!device_is_ready(pwm_motor0.dev)) {
+        printk("PWM device %s is not ready\n", pwm_motor0.dev->name);
+        return 0;
+    }
 
-	/*
-	 * In case the default MAX_PERIOD value cannot be set for
-	 * some PWM hardware, decrease its value until it can.
-	 *
-	 * Keep its value at least MIN_PERIOD * 4 to make sure
-	 * the sample changes frequency at least once.
-	 */
-	printk("Calibrating for channel %d...\n", pwm_motor0.channel);
-	max_period = MAX_PERIOD;
-	while (pwm_set_dt(&pwm_motor0, max_period, max_period / 2U)) {
-		max_period /= 2U;
-		if (max_period < (4U * MIN_PERIOD)) {
-			printk("Error: PWM device "
-				   "does not support a period at least %lu\n",
-				   4U * MIN_PERIOD);
-			return 0;
-		}
-	}
+    printk("PWM device %s is ready\n", pwm_motor0.dev->name);
 
-	printk("Done calibrating; maximum/minimum periods %u/%lu nsec\n",
-		   max_period, MIN_PERIOD);
+    while (1) {
+        // Set PWM duty cycle for motor0 (GPIO16) - Example: 50%
+        ret = pwm_set_dt(&pwm_motor0, PWM_USEC(1000), PWM_USEC(500)); // 50% duty cycle
+        if (ret < 0) {
+            printk("Error setting PWM duty cycle for motor0: %d\n", ret);
+        }
 
-	period = max_period;
-	while (1) {
-		ret = pwm_set_dt(&pwm_motor0, period, period / 2U);
-		if (ret) {
-			printk("Error %d: failed to set pulse width\n", ret);
-			return 0;
-		}
-		printk("Using period %d\n", period);
+        k_sleep(K_MSEC(1000));
+    }
 
-		period = dir ? (period * 2U) : (period / 2U);
-		if (period > max_period) {
-			period = max_period / 2U;
-			dir = 0U;
-		} else if (period < MIN_PERIOD) {
-			period = MIN_PERIOD * 2U;
-			dir = 1U;
-		}
-
-		k_sleep(K_SECONDS(4U));
-	}
-	return 0;
+    return 0;
 }

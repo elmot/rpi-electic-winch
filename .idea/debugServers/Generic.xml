@@ -8,7 +8,7 @@
       <env />
     </gdbserver>
     <console enabled="true" port="4444" />
-    <target reset-before="false" />
-    <connection remote-string="tcp::3333" custom-script="echo Connecting to target...\n&#10;$GDBTargetCommand$&#10;echo Connected to target!\n" warmup-ms="500" />
+    <target reset-command="monitor reset init" reset-before="false" />
+    <connection extended-remote="false" remote-string="tcp::3333" custom-script="echo Connecting to target...\n&#10;$GDBTargetCommand$&#10;echo Connected to target!\n" warmup-ms="500" />
   </generic-debug-target>
 </component>
