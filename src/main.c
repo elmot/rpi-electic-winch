@@ -2,8 +2,9 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
-#include <zephyr/sys/printk.h>
 
+#include "zephyr/usb/usb_device.h"
+#include <zephyr/sys/printk.h>
 
 #if !DT_NODE_HAS_STATUS(DT_ALIAS(pwm_motor0), okay)
 #error "pwm_motor0 device is not enabled"
@@ -21,6 +22,7 @@ static const struct pwm_dt_spec pwm_motor1 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_motor1
 int main(void)
 {
     int ret;
+    usb_enable(NULL);
 
     if (!device_is_ready(pwm_motor0.dev)) {
         printk("PWM device %s is not ready\n", pwm_motor0.dev->name);
@@ -45,7 +47,7 @@ int main(void)
         if (ret < 0) {
             printk("Error setting PWM duty cycle for motor1: %d\n", ret);
         }
-
+        printk("PWM duties set\n");
         k_sleep(K_MSEC(1000));
     }
 
