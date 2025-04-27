@@ -1,6 +1,7 @@
 / {
 	aliases {
 		pwm-motor0 = &motor0;
+		pwm-motor1 = &motor1;
 	};
 
 	pwm_motors {
@@ -10,6 +11,11 @@
 		motor0: motor0_pwm {
 			pwms = <&pwm 0 PWM_HZ(1000) PWM_POLARITY_NORMAL>;
 			label = "PWM_MOTOR0";
+		};
+
+		motor1: motor1_pwm {
+			pwms = <&pwm 1 PWM_HZ(1000) PWM_POLARITY_NORMAL>;
+			label = "PWM_MOTOR1";
 		};
 
 	};
@@ -26,7 +32,7 @@
 	pwmm1_default: pwmm1_default {
 		status = "okay";
 		group1 {
-			pinmux = <PWM_0A_P16>;
+			pinmux = <PWM_0A_P16>, <PWM_0B_P17> ;
 			bias-disable;  /* Disable pull-up/pull-down */
 		};
 	};
