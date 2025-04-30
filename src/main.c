@@ -142,7 +142,6 @@ _Noreturn void led_task_entry(__unused void* p1,__unused void* p2,__unused void*
 _Noreturn int main(void)
 {
     usb_enable(NULL);
-
     startup_device(pwm_motor0.dev);
     startup_device(pwm_motor1.dev);
     startup_device(pwm_led.dev);
@@ -161,6 +160,10 @@ _Noreturn int main(void)
 
 
     //todo remove test
+
+    atomic_set(&led_status, ALARM);
+    k_sleep(K_SECONDS(3));
+
     motor_pwm(100);
     k_sleep(K_MSEC(4000));
     motor_pwm(30);
