@@ -1,6 +1,7 @@
 / {
 	chosen {
 		zephyr,shell-uart = &cdc_acm_uart0;
+		zephyr,console = &cdc_acm_uart1;
 	};
 
 	aliases {
@@ -33,11 +34,19 @@
 	};
 };
 
+&uart0 {
+	status = "disabled";
+};
+
+&i2c0 {
+	status = "disabled";
+};
+
 &i2c1 {
 	status = "okay";
 	pinctrl-0 = <&i2c1_default>;
 	pinctrl-names = "default";
-
+	label = "i2c1";
 	as5600: as5600@36 {
 		compatible = "ams,as5600";
 		reg = <0x36>;
@@ -50,6 +59,8 @@
 	status = "okay";
 	pinctrl-0 = <&pwmm1_default>;
 	pinctrl-names = "default";
+	label = "pwm0";
+
 };
 
 &pinctrl {
@@ -72,9 +83,14 @@
 	};
 };
 
+
 &zephyr_udc0 {
 	cdc_acm_uart0: cdc_acm_uart0 {
 		compatible = "zephyr,cdc-acm-uart";
 		label = "CDC_ACM_0";
+	};
+	cdc_acm_uart1: cdc_acm_uart1 {
+		compatible = "zephyr,cdc-acm-uart";
+		label = "CDC_ACM_1";
 	};
 };
