@@ -27,8 +27,10 @@
 
 enum led_status_type
 {
-    OFF, ON, DIM, ALARM
+    OFF, ON, DIM, ALARM, SUSPEND
 };
+
+void motor_pause(bool suspend);
 
 extern const struct pwm_dt_spec pwm_motor0;
 extern const struct pwm_dt_spec pwm_motor1;
@@ -38,6 +40,7 @@ extern const struct device* const as5600_dev;
 
 extern atomic_t led_status;
 
-extern atomic_t motor_suspended;
+#define STORAGE_PARTITION	storage_partition
+#define STORAGE_PARTITION_ID	FIXED_PARTITION_ID(STORAGE_PARTITION)
 
 #endif /* MAIN_H */

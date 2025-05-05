@@ -55,21 +55,20 @@ static int cmd_joystick(const struct shell* sh, size_t argc, char** argv)
 static int cmd_pause(const struct shell* sh, __unused size_t argc, __unused char** argv)
 {
     shell_print(sh, "Motor control paused");
-    atomic_set(&motor_suspended, true);
+    motor_pause(true);
     return 0;
 }
 
 static int cmd_resume(const struct shell* sh,__unused size_t argc,__unused char** argv)
 {
     shell_print(sh, "Motor control resumed");
-    atomic_set(&motor_suspended, false);
+    motor_pause(false);
     return 0;
 }
 
 static int cmd_params(const struct shell* sh,__unused size_t argc,__unused char** argv)
 {
-    shell_print(sh, "Motor control resumed");
-    atomic_set(&motor_suspended, false);
+    //TODO
     return 0;
 }
 

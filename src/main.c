@@ -35,6 +35,9 @@ void startup_device(const struct device* dev)
     atomic_set(&led_status, OFF);
 }
 
+static int old_motor_duty = 10000000;
+atomic_t motor_suspended = ATOMIC_INIT(false);
+
 /** Set motor PWM
  *
  * @param duty PWM duty, [-100..100]
@@ -42,12 +45,14 @@ void startup_device(const struct device* dev)
  */
 void motor_pwm(int duty, bool forced)
 {
-    if (motor_suspended && !forced) return;
-    static int old_duty = 10000000;
     if (duty > 100) duty = 100;
     if (duty < -100) duty = -100;
-    if (old_duty == duty) return;
-    old_duty = duty;
+    if (motor_suspended && !forced) {
+        old_motor_duty = duty;
+        return;
+    }
+    if (old_motor_duty == duty && !forced) return;
+    old_motor_duty = duty;
     int ret;
     enum led_status_type new_status;
     if (duty > MIN_PWM_PERCENT) {
@@ -71,6 +76,20 @@ void motor_pwm(int duty, bool forced)
         atomic_set(&led_status, new_status);
     }
 }
+
+void motor_pause(bool suspend)
+{
+    atomic_set(&motor_suspended, suspend);
+    if (suspend) {
+        motor_pwm(0, true);
+        atomic_set(&led_status, SUSPEND);
+    } else {
+        atomic_set(&led_status, OFF);
+        if (old_motor_duty >= -100 && old_motor_duty <= 100)
+        motor_pwm(old_motor_duty, true);
+    }
+}
+
 
 _Noreturn void alarm(const char* fmt, ...)
 {
@@ -98,23 +117,27 @@ _Noreturn void led_task_entry(__unused void* p1,__unused void* p2,__unused void*
                      pwm_set_dt(&pwm_led, PWM_USEC(40), PWM_USEC(40));
                      break;
                  case DIM:
+                 case SUSPEND:
                      pwm_set_dt(&pwm_led, PWM_USEC(40), PWM_USEC(10));
                      break;
                  default:
                      pwm_set_dt(&pwm_led, PWM_USEC(40), PWM_USEC(0));
-                     break;
             }
         }
-        if (led_status == ALARM) {
-            k_sleep(K_MSEC(100));
-        } else {
-            k_sleep(K_MSEC(500));
+        switch (led_status) {
+            case ALARM:
+                k_sleep(K_MSEC(100));
+                break;
+            case SUSPEND:
+                k_sleep(K_SECONDS(1));
+                break;
+            default:
+                k_sleep(K_MSEC(500));
         }
             phase = !phase;
     }
 }
 
-atomic_t motor_suspended = ATOMIC_INIT(false);
 
 _Noreturn int main(void)
 {
