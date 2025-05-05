@@ -1,14 +1,8 @@
-#include <zephyr/drivers/pwm.h>
-#include <zephyr/kernel.h>
-#include <zephyr/device.h>
-#include <zephyr/devicetree.h>
 
-#include "zephyr/usb/usb_device.h"
+#include "main.h"
+#include "params.h"
 #include <zephyr/sys/printk.h>
 
-#include "zephyr/drivers/sensor.h"
-
-#include "params.h"
 //todo algorithms
 //todo safe start
 
@@ -16,35 +10,14 @@
 //todo PHASE III sensor status
 //todo PHASE IV motor current alarm
 
-#if !DT_NODE_HAS_STATUS(DT_ALIAS(pwm_motor0), okay)
-#error "pwm_motor0 device is not enabled"
-#endif
 
-#if !DT_NODE_HAS_STATUS(DT_ALIAS(pwm_motor1), okay)
-#error "pwm_motor1 device is not enabled"
-#endif
+atomic_t led_status = ATOMIC_INIT(OFF);
 
-// <<< Add check for pwm_led alias >>>
-#if !DT_NODE_HAS_STATUS(DT_ALIAS(pwm_led), okay)
-#error "pwm_led device alias not found or not enabled"
-#endif
+const struct pwm_dt_spec pwm_motor0 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_motor0));
+const struct pwm_dt_spec pwm_motor1 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_motor1));
+const struct pwm_dt_spec pwm_led = PWM_DT_SPEC_GET(DT_ALIAS(pwm_led));
 
-#if !DT_NODE_HAS_STATUS(DT_ALIAS(as5600_sensor), okay)
-    #error "as5600_sensor device alias not found or not enabled"
-#endif
-
-enum led_status_type
-{
-    OFF, ON, DIM, ALARM
-};
-
-atomic_t led_status = ATOMIC_INIT(OFF); // Initialize to OFF
-
-static const struct pwm_dt_spec pwm_motor0 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_motor0));
-static const struct pwm_dt_spec pwm_motor1 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_motor1));
-static const struct pwm_dt_spec pwm_led = PWM_DT_SPEC_GET(DT_ALIAS(pwm_led));
-
-static const struct device* const as5600_dev = DEVICE_DT_GET(DT_ALIAS(as5600_sensor));
+const struct device* const as5600_dev = DEVICE_DT_GET(DT_ALIAS(as5600_sensor));
 
 #define LED_STACK_SIZE 512
 #define LED_PRIORITY 5
@@ -65,9 +38,11 @@ void startup_device(const struct device* dev)
 /** Set motor PWM
  *
  * @param duty PWM duty, [-100..100]
+ * @param forced ignore motor suspend flag for sake of setup
  */
-void motor_pwm(int duty)
+void motor_pwm(int duty, bool forced)
 {
+    if (motor_suspended && !forced) return;
     static int old_duty = 10000000;
     if (duty > 100) duty = 100;
     if (duty < -100) duty = -100;
@@ -99,7 +74,7 @@ void motor_pwm(int duty)
 
 _Noreturn void alarm(const char* fmt, ...)
 {
-    motor_pwm(0);
+    motor_pwm(0, true);
     atomic_set(&led_status, ALARM);
     while (1) {
         va_list ap;
@@ -139,9 +114,10 @@ _Noreturn void led_task_entry(__unused void* p1,__unused void* p2,__unused void*
     }
 }
 
+atomic_t motor_suspended = ATOMIC_INIT(false);
+
 _Noreturn int main(void)
 {
-    usb_enable(NULL);
     startup_device(pwm_motor0.dev);
     startup_device(pwm_motor1.dev);
     startup_device(pwm_led.dev);
@@ -164,15 +140,15 @@ _Noreturn int main(void)
     atomic_set(&led_status, ALARM);
     k_sleep(K_SECONDS(3));
 
-    motor_pwm(100);
+    motor_pwm(100, false);
     k_sleep(K_MSEC(4000));
-    motor_pwm(30);
+    motor_pwm(30, false);
     k_sleep(K_MSEC(4000));
-    motor_pwm(-30);
+    motor_pwm(-30, false);
     k_sleep(K_MSEC(4000));
-    motor_pwm(-100);
+    motor_pwm(-100, false);
     k_sleep(K_MSEC(4000));
-    motor_pwm(10);
+    motor_pwm(10, false);
 
 
     while (1) {
