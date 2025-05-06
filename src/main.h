@@ -40,6 +40,20 @@ extern const struct device* const as5600_dev;
 
 extern atomic_t led_status;
 
+__packed struct params_t
+{
+    uint16_t min_pwm_percent;
+    uint16_t dead_angle_degree;
+    int16_t center_angle_degree;
+    uint16_t max_angle_degree;
+};
+
+extern struct params_t params;
+
+void loadParameters();
+
+_Noreturn void alarm(const char* fmt, ...);
+
 #define STORAGE_PARTITION	storage_partition
 #define STORAGE_PARTITION_ID	FIXED_PARTITION_ID(STORAGE_PARTITION)
 

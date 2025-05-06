@@ -1,7 +1,9 @@
 
 #include "main.h"
-#include "params.h"
 #include <zephyr/sys/printk.h>
+
+#include "zephyr/settings/settings.h"
+#include "zephyr/usb/usb_device.h"
 
 //todo algorithms
 //todo safe start
@@ -10,14 +12,20 @@
 //todo PHASE III sensor status
 //todo PHASE IV motor current alarm
 
+struct params_t params = {
+    .max_angle_degree = 40,
+    .min_pwm_percent = 10,
+    .center_angle_degree = -1,
+    .dead_angle_degree = 5
+};
 
 atomic_t led_status = ATOMIC_INIT(OFF);
 
-const struct pwm_dt_spec pwm_motor0 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_motor0));
-const struct pwm_dt_spec pwm_motor1 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_motor1));
-const struct pwm_dt_spec pwm_led = PWM_DT_SPEC_GET(DT_ALIAS(pwm_led));
+const struct pwm_dt_spec pwm_motor0 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_motor0));    // NOLINT(*-interfaces-global-init)
+const struct pwm_dt_spec pwm_motor1 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_motor1));    // NOLINT(*-interfaces-global-init)
+const struct pwm_dt_spec pwm_led = PWM_DT_SPEC_GET(DT_ALIAS(pwm_led));          // NOLINT(*-interfaces-global-init)
 
-const struct device* const as5600_dev = DEVICE_DT_GET(DT_ALIAS(as5600_sensor));
+const struct device* const as5600_dev = DEVICE_DT_GET(DT_ALIAS(as5600_sensor)); // NOLINT(*-interfaces-global-init)
 
 #define LED_STACK_SIZE 512
 #define LED_PRIORITY 5
@@ -55,11 +63,11 @@ void motor_pwm(int duty, bool forced)
     old_motor_duty = duty;
     int ret;
     enum led_status_type new_status;
-    if (duty > MIN_PWM_PERCENT) {
+    if (duty > params.min_pwm_percent) {
         ret =  pwm_set_dt(&pwm_motor0, PWM_USEC(40), PWM_USEC(40 * duty / 100));
         ret |= pwm_set_dt(&pwm_motor1, PWM_USEC(40), PWM_USEC(0));
         new_status = duty >=99 ? ON : DIM;
-    } else if (duty < -MIN_PWM_PERCENT) {
+    } else if (duty < - params.min_pwm_percent) {
         ret = pwm_set_dt(&pwm_motor0, PWM_USEC(40), PWM_USEC(0));
         ret |= pwm_set_dt(&pwm_motor1, PWM_USEC(40), PWM_USEC(-40 * duty / 100));
         new_status = duty <=-99 ? ON : DIM;
@@ -145,7 +153,6 @@ _Noreturn int main(void)
     startup_device(pwm_motor1.dev);
     startup_device(pwm_led.dev);
     startup_device(as5600_dev);
-
     // <<< Create and start the LED task >>>
     k_tid_t led_tid = k_thread_create(&led_thread_data, led_stack_area,
                                       K_THREAD_STACK_SIZEOF(led_stack_area),
@@ -157,6 +164,7 @@ _Noreturn int main(void)
          k_thread_name_set(led_tid, "led_task");
     }
 
+    loadParameters();
 
     //todo remove test
 

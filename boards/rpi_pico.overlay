@@ -94,3 +94,28 @@
 		label = "CDC_ACM_1";
 	};
 };
+
+&flash0 {
+	reg = <0x10000000 DT_SIZE_M(2)>;
+
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/*
+		 * Usable flash. Starts at 0x100, after the bootloader. The partition
+		 * size is 1MB minus the 0x100 bytes taken by the bootloader.
+		 */
+		code_partition: partition@100 {
+			label = "code-partition";
+			reg = <0x100 (DT_SIZE_M(1) - 0x100)>;
+			read-only;
+		};
+
+		storage_partition: partition@100000 {
+			label = "storage";
+			reg = <0x100000 0x00007000>;
+		};
+	};
+};
