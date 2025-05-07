@@ -16,11 +16,21 @@ static const struct device *i2c_bus_dev = DEVICE_DT_GET(DT_ALIAS(as5600_bus)); /
 
 #define AS5600_STATUS_REG (0x0B)
 #define AS5600_STATUS_MAGNET_DETECTED_FLAG (0x20)
-#define AS5600_ANGLE_REGISTER_HIGH (0x0E)
+#define AS5600_ANGLE_H_REG (0x0E)
+#define AS5600_CONF_H_REG (0x07)
+#define AS5600_CONF_L_REG (0x08)
+#define AS5600_CONF_L_LPM2 (0x02)
+#define AS5600_CONF_H_WD (0x20)
 
 static _Noreturn void sensor_task_entry(__unused void* p1,__unused void* p2,__unused void* p3)
 {
-    //todo low power
+    int ret = i2c_reg_write_byte(i2c_bus_dev, AS5600_I2C_ADDRESS,AS5600_CONF_H_REG, AS5600_CONF_H_WD);
+    if (!ret) {
+        ret = i2c_reg_write_byte(i2c_bus_dev, AS5600_I2C_ADDRESS,AS5600_CONF_L_REG, AS5600_CONF_L_LPM2);
+    }
+    if (ret != 0) {
+        alarm("Failed to write low-power mode to AS5600: %d", ret);
+    }
     while (true) {
         uint8_t status;
         int ret = i2c_reg_read_byte(i2c_bus_dev, AS5600_I2C_ADDRESS,AS5600_STATUS_REG, &status);
@@ -34,7 +44,7 @@ static _Noreturn void sensor_task_entry(__unused void* p1,__unused void* p2,__un
             k_sleep(K_MSEC(500));
         } else {
             uint8_t read_data[2] = {0, 0};
-            static const uint8_t angle_reg = AS5600_ANGLE_REGISTER_HIGH;
+            static const uint8_t angle_reg = AS5600_ANGLE_H_REG;
 
             ret = i2c_write_read(i2c_bus_dev, AS5600_I2C_ADDRESS, &angle_reg, 1, &read_data, sizeof(read_data));
             if (ret != 0) {
