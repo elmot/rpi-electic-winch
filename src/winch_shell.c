@@ -142,7 +142,20 @@ static int cmd_set_min_pwm(const struct shell* sh, size_t argc, char** argv)
 {
     int val = parse_int(sh, argc, argv, 99, "Usage: set_min_pwm [percent]\n");
     if (val < 0) return 1;
-    params.min_pwm_percent = val % 100;
+    val = val % 100;
+    params.min_pwm_percent = val;
+    cmd_pause(sh, 0,NULL);
+    k_sleep(K_MSEC(200));
+    shell_print(sh, "Testing motor forward...");
+    motor_pwm(params.min_pwm_percent, true);
+    k_sleep(K_MSEC(1500));
+    motor_pwm(0, true);
+    k_sleep(K_MSEC(500));
+    shell_print(sh, "Testing motor reverse...");
+    motor_pwm(-params.min_pwm_percent, true);
+    k_sleep(K_MSEC(1500));
+    motor_pwm(0, true);
+
     cmd_params(sh, 0,NULL);
     return save_params(sh);
 }

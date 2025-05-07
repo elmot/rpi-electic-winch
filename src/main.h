@@ -35,6 +35,13 @@ extern const struct pwm_dt_spec pwm_led;
 
 extern atomic_t led_status;
 
+/** Set motor PWM
+ *
+ * @param duty PWM duty, [-100..100]
+ * @param forced ignore motor suspend flag for sake of setup
+ */
+void motor_pwm(int duty, bool forced);
+
 __packed struct params_t
 {
     uint16_t min_pwm_percent;

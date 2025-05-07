@@ -39,11 +39,6 @@ void startup_device(const struct device* dev)
 atomic_t motor_suspended = ATOMIC_INIT(false);
 atomic_t report_motor_pwm = ATOMIC_INIT(0);
 
-/** Set motor PWM
- *
- * @param duty PWM duty, [-100..100]
- * @param forced ignore motor suspend flag for sake of setup
- */
 void motor_pwm(int duty, bool forced)
 {
     static int old_motor_duty = 1000000;
@@ -55,10 +50,10 @@ void motor_pwm(int duty, bool forced)
     if (old_motor_duty == duty && !forced) return;
     old_motor_duty = duty;
     int ret;
-    if (duty > params.min_pwm_percent) {
+    if (duty >= params.min_pwm_percent) {
         ret = pwm_set_dt(&pwm_motor0, PWM_USEC(40), PWM_USEC(40 * duty / 100));
         ret |= pwm_set_dt(&pwm_motor1, PWM_USEC(40), PWM_USEC(0));
-    } else if (duty < -params.min_pwm_percent) {
+    } else if (duty <= -params.min_pwm_percent) {
         ret = pwm_set_dt(&pwm_motor0, PWM_USEC(40), PWM_USEC(0));
         ret |= pwm_set_dt(&pwm_motor1, PWM_USEC(40), PWM_USEC(-40 * duty / 100));
     } else {
@@ -163,6 +158,10 @@ _Noreturn void motor_loop()
     int desired_pwm = 0;
     static int current_pwm = 0;
     while (true) {
+        if (atomic_get(&motor_suspended)) {
+            k_sleep(K_MSEC(300));
+            continue;
+        }
         k_sleep(K_MSEC(2));
         int angle = atomic_get(&sampled_angle_degree);
         if (angle < 0) {
