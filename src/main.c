@@ -106,8 +106,6 @@ _Noreturn void alarm(const char* fmt, ...)
     }
 }
 
-
-
 _Noreturn void led_task_entry(__unused void* p1,__unused void* p2,__unused void* p3)
 {
     static bool phase = false;

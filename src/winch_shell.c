@@ -6,12 +6,15 @@
 #include "main.h"
 #include "zephyr/fs/nvs.h"
 #include "zephyr/settings/settings.h"
+#ifdef CONFIG_SOC_SERIES_RP2XXX
+#include <pico/bootrom.h>
+#endif
 
 #define PARAMETERS_SIZE sizeof(struct params_t)
 
-int params_handle_get(const char *key, char *val, int val_len_max)
+int params_handle_get(const char* key, char* val, int val_len_max)
 {
-    if (key !=NULL && *key!=0) {
+    if (key != NULL && *key != 0) {
         return -EINVAL;
     }
     if (val_len_max < PARAMETERS_SIZE) {
@@ -20,6 +23,7 @@ int params_handle_get(const char *key, char *val, int val_len_max)
     memcpy(val, &params, PARAMETERS_SIZE);
     return PARAMETERS_SIZE;
 }
+
 /**< Set value handler of settings items identified by keyword names.
  *
  * Parameters:
@@ -32,10 +36,10 @@ int params_handle_get(const char *key, char *val, int val_len_max)
  *
  * Return: 0 on success, non-zero on failure.
  */
-int params_handle_set(const char *key, size_t len, settings_read_cb read_cb,
-         void *cb_arg)
+int params_handle_set(const char* key, size_t len, settings_read_cb read_cb,
+                      void* cb_arg)
 {
-    if (key !=NULL && *key!=0) {
+    if (key != NULL && *key != 0) {
         return -EINVAL;
     }
     if (len < PARAMETERS_SIZE) {
@@ -52,7 +56,6 @@ void loadParameters()
 {
     int res = settings_subsys_init();
     if (res) {
-
         alarm("Failed to initialize settings subsystem: %d", res);
     }
     settings_load();
@@ -65,15 +68,15 @@ static int cmd_reboot(const struct shell* sh, size_t argc, char** argv)
     sys_reboot(SYS_REBOOT_COLD);
 }
 
-static int parse_int(const struct shell* sh, size_t argc, char** argv, int max_value, const char *usage)
+static int parse_int(const struct shell* sh, size_t argc, char** argv, int max_value, const char* usage)
 {
     if (argc != 2) {
         shell_print(sh, "%s", usage);
         return -1;
     }
-    char * end_ptr;
+    char* end_ptr;
     int val = strtol(argv[1], &end_ptr, 10);
-    if(*end_ptr != '\0' || val > max_value){
+    if (*end_ptr != '\0' || val > max_value) {
         shell_print(sh, "%s", usage);
         return -1;
     }
@@ -102,9 +105,9 @@ static int cmd_joystick(const struct shell* sh, size_t argc, char** argv)
 static int cmd_params(const struct shell* sh,__unused size_t argc,__unused char** argv)
 {
     shell_print(sh, "Angle center %d; dead %d; max %d",
-        params.center_angle_degree,
-        params.dead_angle_degree,
-        params.max_angle_degree);
+                params.center_angle_degree,
+                params.dead_angle_degree,
+                params.max_angle_degree);
     shell_print(sh, "PWM min: %d%%", params.min_pwm_percent);
     return 0;
 }
@@ -128,16 +131,18 @@ static int cmd_resume(const struct shell* sh,__unused size_t argc,__unused char*
 static int save_params(const struct shell* sh)
 {
     int result = settings_save_one("parameters", &params, PARAMETERS_SIZE);
-    if (result) shell_print(sh, "Failed to save settings: %d", result);
+    if (result)
+        shell_print(sh, "Failed to save settings: %d", result);
     result = settings_commit();
     if (result) printk("Failed to commit: %d", result);
     return result;
 }
+
 static int cmd_set_min_pwm(const struct shell* sh, size_t argc, char** argv)
 {
     int val = parse_int(sh, argc, argv, 99, "Usage: set_min_pwm [percent]\n");
     if (val < 0) return 1;
-    params.min_pwm_percent =  val % 100;
+    params.min_pwm_percent = val % 100;
     cmd_params(sh, 0,NULL);
     return save_params(sh);
 }
@@ -178,6 +183,23 @@ static int cmd_center_joystick(const struct shell* sh, size_t argc, char** argv)
 
 
 SHELL_CMD_REGISTER(reboot, NULL, "Reboot MCU", cmd_reboot); // NOLINT(*-branch-clone)
+
+#ifdef CONFIG_SOC_SERIES_RP2XXX
+static int cmd_bootloader(const struct shell* sh, size_t argc, char** argv)
+{
+#ifdef CONFIG_BOARD_RPI_PICO
+#define BOOTLOADER_LED_MASK (1 << 25)
+#else
+#define BOOTLOADER_LED_MASK (0)
+#endif
+    shell_print(sh, "Starting bootloader...");
+    k_sleep(K_SECONDS(1));
+    reset_usb_boot(BOOTLOADER_LED_MASK, 0);
+}
+
+SHELL_CMD_REGISTER(bootloader, NULL, "Reboot MCU to bootloader", cmd_bootloader); // NOLINT(*-branch-clone)
+#endif
+
 SHELL_CMD_REGISTER(pause, NULL, "Suspend normal operation to setup parameters", cmd_pause); // NOLINT(*-branch-clone)
 SHELL_CMD_REGISTER(resume, NULL, "Resume normal operation", cmd_resume); // NOLINT(*-branch-clone)
 SHELL_CMD_REGISTER(params, NULL, "Print current params", cmd_params); // NOLINT(*-branch-clone)
