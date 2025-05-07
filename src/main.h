@@ -6,8 +6,6 @@
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 
-#include "zephyr/drivers/sensor.h"
-
 #if !DT_NODE_HAS_STATUS(DT_ALIAS(pwm_motor0), okay)
 #error "pwm_motor0 device is not enabled"
 #endif
@@ -21,9 +19,8 @@
 #error "pwm_led device alias not found or not enabled"
 #endif
 
-#if !DT_NODE_HAS_STATUS(DT_ALIAS(as5600_sensor), okay)
-    #error "as5600_sensor device alias not found or not enabled"
-#endif
+#define TASK_STACK_SIZE 1512
+#define TASK_PRIORITY 5
 
 enum led_status_type
 {
@@ -35,8 +32,6 @@ void motor_pause(bool suspend);
 extern const struct pwm_dt_spec pwm_motor0;
 extern const struct pwm_dt_spec pwm_motor1;
 extern const struct pwm_dt_spec pwm_led;
-
-extern const struct device* const as5600_dev;
 
 extern atomic_t led_status;
 
@@ -52,6 +47,8 @@ extern struct params_t params;
 extern atomic_t sampled_angle_degree;
 
 void loadParameters();
+void startSensorThread();
+void startup_device(const struct device* dev);
 
 _Noreturn void alarm(const char* fmt, ...);
 

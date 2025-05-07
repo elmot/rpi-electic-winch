@@ -1,15 +1,14 @@
 #include "main.h"
 #include <zephyr/sys/printk.h>
 
+#include "zephyr/drivers/i2c.h"
 #include "zephyr/settings/settings.h"
 
 //todo algorithms
-//todo detect sensor magnet
 //todo safe start
 
-//todo PHASE II battery watching
-//todo PHASE III sensor status
-//todo PHASE IV motor current alarm
+//todo improve PHASE I battery watching
+//todo improve PHASE II motor current alarm
 
 struct params_t params = {
     .max_angle_degree = 40,
@@ -24,14 +23,8 @@ const struct pwm_dt_spec pwm_motor0 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_motor0)); // 
 const struct pwm_dt_spec pwm_motor1 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_motor1)); // NOLINT(*-interfaces-global-init)
 const struct pwm_dt_spec pwm_led = PWM_DT_SPEC_GET(DT_ALIAS(pwm_led)); // NOLINT(*-interfaces-global-init)
 
-const struct device* const as5600_dev = DEVICE_DT_GET(DT_ALIAS(as5600_sensor)); // NOLINT(*-interfaces-global-init)
-
-#define TASK_STACK_SIZE 1512
-#define TASK_PRIORITY 5
 K_THREAD_STACK_DEFINE(led_stack_area, TASK_STACK_SIZE);
-K_THREAD_STACK_DEFINE(sensor_stack_area, TASK_STACK_SIZE);
 struct k_thread led_thread_data;
-struct k_thread sensor_thread_data;
 
 void startup_device(const struct device* dev)
 {
@@ -113,30 +106,7 @@ _Noreturn void alarm(const char* fmt, ...)
     }
 }
 
-atomic_t sampled_angle_degree;
 
-_Noreturn void sensor_task_entry(__unused void* p1,__unused void* p2,__unused void* p3)
-{
-    while (true) {
-        static struct sensor_value angle_val;
-        int ret = sensor_sample_fetch(as5600_dev);
-        if (ret != 0) {
-            printk("Failed to fetch sample from AS5600: %d\n", ret);
-            atomic_set(&sampled_angle_degree, -1);
-            atomic_set(&led_status, ALARM);
-        } else {
-            ret = sensor_channel_get(as5600_dev, SENSOR_CHAN_ROTATION, &angle_val);
-            if (ret < 0) {
-                printk("Failed to get angle data from AS5600: %d\n", ret);
-                atomic_set(&sampled_angle_degree, -1);
-                atomic_set(&led_status, ALARM);
-            } else {
-                atomic_set(&sampled_angle_degree, angle_val.val1);
-            }
-        }
-        k_sleep(K_MSEC(50));
-    }
-}
 
 _Noreturn void led_task_entry(__unused void* p1,__unused void* p2,__unused void* p3)
 {
@@ -177,7 +147,6 @@ _Noreturn int main(void)
     startup_device(pwm_motor0.dev);
     startup_device(pwm_motor1.dev);
     startup_device(pwm_led.dev);
-    startup_device(as5600_dev);
     // Create and start the LED task
     k_tid_t led_tid = k_thread_create(&led_thread_data, led_stack_area,
                                       K_THREAD_STACK_SIZEOF(led_stack_area),
@@ -188,19 +157,9 @@ _Noreturn int main(void)
     } else {
         k_thread_name_set(led_tid, "led_task");
     }
-    // Create and start the sensor task
-    k_tid_t sensor_tid = k_thread_create(&sensor_thread_data, sensor_stack_area,
-                                         K_THREAD_STACK_SIZEOF(sensor_stack_area),
-                                         sensor_task_entry, NULL, NULL, NULL,
-                                         TASK_PRIORITY, 0, K_NO_WAIT);
-    if (!sensor_tid) {
-        alarm("Failed to create sensor thread!\n");
-    } else {
-        k_thread_name_set(sensor_tid, "sensor_task");
-    }
 
     loadParameters();
-
+    startSensorThread();
     //todo remove test
 
     atomic_set(&led_status, ALARM);

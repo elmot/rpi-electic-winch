@@ -8,8 +8,7 @@
 		pwm-motor0 = &motor0;
 		pwm-motor1 = &motor1;
 		pwm-led = &led;
-
-		as5600-sensor = &as5600;
+		as5600-bus = &i2c1;
 	};
 
 	pwm_motors {
@@ -47,12 +46,6 @@
 	pinctrl-0 = <&i2c1_default>;
 	pinctrl-names = "default";
 	label = "i2c1";
-	as5600: as5600@36 {
-		compatible = "ams,as5600";
-		reg = <0x36>;
-		status = "okay";
-	};
-
 };
 
 &pwm {
