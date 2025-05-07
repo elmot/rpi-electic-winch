@@ -1,11 +1,10 @@
 #include "main.h"
+
+#include <stdlib.h>
 #include <zephyr/sys/printk.h>
 
 #include "zephyr/drivers/i2c.h"
 #include "zephyr/settings/settings.h"
-
-//todo algorithms
-//todo safe start
 
 //todo improve PHASE I battery watching
 //todo improve PHASE II motor current alarm
@@ -37,8 +36,8 @@ void startup_device(const struct device* dev)
     atomic_set(&led_status, OFF);
 }
 
-static int old_motor_duty = 10000000;
 atomic_t motor_suspended = ATOMIC_INIT(false);
+atomic_t report_motor_pwm = ATOMIC_INIT(0);
 
 /** Set motor PWM
  *
@@ -47,35 +46,27 @@ atomic_t motor_suspended = ATOMIC_INIT(false);
  */
 void motor_pwm(int duty, bool forced)
 {
+    static int old_motor_duty = 1000000;
     if (duty > 100) duty = 100;
     if (duty < -100) duty = -100;
     if (motor_suspended && !forced) {
-        old_motor_duty = duty;
         return;
     }
     if (old_motor_duty == duty && !forced) return;
     old_motor_duty = duty;
     int ret;
-    enum led_status_type new_status;
     if (duty > params.min_pwm_percent) {
         ret = pwm_set_dt(&pwm_motor0, PWM_USEC(40), PWM_USEC(40 * duty / 100));
         ret |= pwm_set_dt(&pwm_motor1, PWM_USEC(40), PWM_USEC(0));
-        new_status = duty >= 99 ? ON : DIM;
     } else if (duty < -params.min_pwm_percent) {
         ret = pwm_set_dt(&pwm_motor0, PWM_USEC(40), PWM_USEC(0));
         ret |= pwm_set_dt(&pwm_motor1, PWM_USEC(40), PWM_USEC(-40 * duty / 100));
-        new_status = duty <= -99 ? ON : DIM;
     } else {
         ret = pwm_set_dt(&pwm_motor0, PWM_USEC(40), PWM_USEC(0));
         ret |= pwm_set_dt(&pwm_motor1, PWM_USEC(40), PWM_USEC(0));
-        new_status = OFF;
     }
     if (ret) {
         printk("Failed to set motor PWM: %d\n", ret);
-        atomic_set(&led_status, ALARM);
-    } else {
-        printk("Motor PWM: %d\n", duty);
-        atomic_set(&led_status, new_status);
     }
 }
 
@@ -87,8 +78,6 @@ void motor_pause(bool suspend)
         atomic_set(&led_status, SUSPEND);
     } else {
         atomic_set(&led_status, OFF);
-        if (old_motor_duty >= -100 && old_motor_duty <= 100)
-            motor_pwm(old_motor_duty, true);
     }
 }
 
@@ -106,9 +95,35 @@ _Noreturn void alarm(const char* fmt, ...)
     }
 }
 
+int effectiveAngle()
+{
+    int angle = atomic_get(&sampled_angle_degree);
+    angle = (360 + angle - params.center_angle_degree) % 360;
+    if (angle > (360 - params.max_angle_degree)) {
+        return angle - 360;
+    }
+    if (angle > 180 ) {
+        return -params.max_angle_degree;
+    }
+    if (angle > params.max_angle_degree) {
+        return params.max_angle_degree;
+    }
+    return angle;
+}
+
 _Noreturn void led_task_entry(__unused void* p1,__unused void* p2,__unused void* p3)
 {
     static bool phase = false;
+    for (int i = 1; i <= 10; i++) {
+        pwm_set_dt(&pwm_led, PWM_USEC(40), PWM_USEC(i * 10));
+        k_sleep(K_MSEC(20));
+    }
+    for (int i = 1; i <= 5; i++) {
+        pwm_set_dt(&pwm_led, PWM_USEC(40), PWM_USEC(40));
+        k_sleep(K_MSEC(150));
+        pwm_set_dt(&pwm_led, PWM_USEC(40), PWM_USEC(0));
+        k_sleep(K_MSEC(50));
+    }
     while (true) {
         if (phase) {
             if (led_status != OFF) pwm_set_dt(&pwm_led, PWM_USEC(40), PWM_USEC(40));
@@ -136,9 +151,62 @@ _Noreturn void led_task_entry(__unused void* p1,__unused void* p2,__unused void*
             k_sleep(K_MSEC(500));
         }
         phase = !phase;
+        int angle = (int)atomic_get(&sampled_angle_degree);
+        printk("Angle sampled: %d, corrected: %d. PWM: %d\n",
+               angle, effectiveAngle(),
+               (int)atomic_get(&report_motor_pwm));
     }
 }
 
+_Noreturn void motor_loop()
+{
+    int desired_pwm = 0;
+    static int current_pwm = 0;
+    while (true) {
+        k_sleep(K_MSEC(2));
+        int angle = atomic_get(&sampled_angle_degree);
+        if (angle < 0) {
+            atomic_set(&led_status, SUSPEND);
+            motor_pwm(0, true);
+            continue;
+        }
+        int effective_angle = effectiveAngle();
+        const int abs_angle = abs(effective_angle) - params.dead_angle_degree;
+        if (abs_angle <= 0) {
+            desired_pwm = 0;
+            atomic_set(&led_status, OFF);
+            motor_pwm(0, true);
+            continue;
+        }
+        desired_pwm = params.min_pwm_percent +
+            (100 - params.min_pwm_percent) * abs_angle / (params.max_angle_degree - params.dead_angle_degree);
+        if (effective_angle < 0) desired_pwm = -desired_pwm;
+        if (desired_pwm >= 0) {
+            if (current_pwm < 0) current_pwm = 0;
+            if (current_pwm < desired_pwm) {
+                current_pwm++;
+            } else { current_pwm = desired_pwm; }
+        } else {
+            if (current_pwm > 0) current_pwm = 0;
+            if (current_pwm > desired_pwm) {
+                current_pwm--;
+            } else { current_pwm = desired_pwm; }
+        }
+        switch (current_pwm) {
+        case 0: atomic_set(&led_status, OFF);
+            break;
+        case 100:
+        case 99:
+        case -99:
+        case -100: atomic_set(&led_status, ON);
+            break;
+        default: atomic_set(&led_status, DIM);
+            break;
+        }
+        motor_pwm(current_pwm, false);
+        atomic_set(&report_motor_pwm, current_pwm);
+    }
+}
 
 _Noreturn int main(void)
 {
@@ -158,24 +226,6 @@ _Noreturn int main(void)
 
     loadParameters();
     startSensorThread();
-    //todo remove test
 
-    atomic_set(&led_status, ALARM);
-    k_sleep(K_SECONDS(3));
-
-    motor_pwm(100, false);
-    k_sleep(K_MSEC(4000));
-    motor_pwm(30, false);
-    k_sleep(K_MSEC(4000));
-    motor_pwm(-30, false);
-    k_sleep(K_MSEC(4000));
-    motor_pwm(-100, false);
-    k_sleep(K_MSEC(4000));
-    motor_pwm(10, false);
-
-
-    while (1) {
-        printk("AS5600 Angle: %d degrees\n", (int)sampled_angle_degree);
-        k_sleep(K_MSEC(1000));
-    }
+    motor_loop();
 }
