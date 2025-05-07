@@ -49,6 +49,7 @@ __packed struct params_t
 };
 
 extern struct params_t params;
+extern atomic_t sampled_angle_degree;
 
 void loadParameters();
 

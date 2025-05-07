@@ -91,21 +91,7 @@ static int cmd_joystick(const struct shell* sh, size_t argc, char** argv)
     }
     shell_print(sh, "Reading joystick:\n");
     for (int i = 0; i < repeat; i++) {
-        static struct sensor_value angle_val;
-        int ret = sensor_sample_fetch(as5600_dev);
-
-        if (ret != 0) {
-            shell_print(sh, "Failed to fetch sample from AS5600: %d", ret);
-        } else {
-            ret = sensor_channel_get(as5600_dev, SENSOR_CHAN_ROTATION, &angle_val);
-            if (ret < 0) {
-                shell_print(sh, "Failed to get angle data from AS5600: %d", ret);
-            } else {
-                int angle_degrees = angle_val.val1;
-                
-                shell_print(sh, "%d: %d degrees", i + 1, angle_degrees);
-            }
-        }
+        shell_print(sh, "%d: %d degrees", i + 1, (int)sampled_angle_degree);
         if (i < repeat - 1) {
             k_sleep(K_SECONDS(1));
         }
@@ -178,9 +164,8 @@ static int cmd_center_joystick(const struct shell* sh, size_t argc, char** argv)
 {
     int val;
     if (argc == 1) {
-        shell_print(sh, "Reading joystick position");
-        //TODO
-        val = 0;
+        val = sampled_angle_degree;
+        shell_print(sh, "Reading joystick position: %d", val);
     } else {
         val = parse_int(sh, argc, argv, 359, "Usage: center_joystick [angle]\n");
         if (val < 0) return 1;
@@ -200,7 +185,7 @@ SHELL_CMD_ARG_REGISTER(joystick, NULL, "Read joystick angle", cmd_joystick, 0, 1
 
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_winch_position, // NOLINT(*-branch-clone)
                                SHELL_CMD(center, NULL, "Set joystick central position [0..359]", cmd_center_joystick),
-                               SHELL_CMD(limit_pwm, NULL, "Set minimal pwm [0..99]", cmd_set_min_pwm),
+                               SHELL_CMD(pwm_min, NULL, "Set minimal pwm [0..99]", cmd_set_min_pwm),
                                SHELL_CMD(dead_angle, NULL, "Set joystick dead angle", cmd_set_dead_angle),
                                SHELL_CMD(max_angle, NULL, "Set joystick max angle", cmd_set_max_angle),
                                SHELL_SUBCMD_SET_END
